@@ -2,15 +2,18 @@
 
 Answers the question MiroFish never asks: did the simulation KNOW anything?
 
-Brier score decomposition (Murphy 1973):
-    Brier = reliability - resolution + uncertainty + within-bin spread
+Brier score decomposition (Murphy 1973), exact form:
+    Brier = reliability - resolution + uncertainty + residual
     - reliability: "when we said 70%, did it happen 70% of the time?" (0 is perfect)
     - resolution:  "do our probabilities separate outcomes?" (higher is better)
     - uncertainty: irreducible variance of the outcome itself (p(1-p) of base rate)
-    - within-bin:  variance of the forecasts inside one bin. The classic three-term
-      identity assumes forecasts are constant within a bin; with coarse bins it is
-      not, and pretending otherwise makes the identity lie by exactly that spread.
-      We carry the term so the identity is exact for ANY binning.
+    - residual:    everything the binned view cannot see: within-bin forecast
+      variance MINUS twice the within-bin forecast/outcome covariance. The
+      classical three-term identity assumes forecasts are constant within bins;
+      with real-valued forecasts and coarse bins it lies by exactly this
+      residual. We carry it so the identity holds for ANY binning. When it is
+      large, your bins are too coarse to interpret separately — use finer bins
+      or trust brier + reliability alone.
 
 An ensemble that only re-derives its seed priors scores NO better than its
 inputs. That test lives in tests/test_calibration.py.
@@ -55,7 +58,7 @@ class CalibrationReport:
     uncertainty: float
     n: int
     bins: list[dict]
-    within_bin: float = 0.0
+    residual: float = 0.0
 
     def summary(self) -> str:
         return (
@@ -63,9 +66,9 @@ class CalibrationReport:
             f"reliability={self.reliability:.3f} (lower=better)  "
             f"resolution={self.resolution:.3f} (higher=better)  "
             f"uncertainty={self.uncertainty:.3f} (irreducible)  "
-            f"within-bin={self.within_bin:.4f}\n"
-            f"identity check: rel - res + unc + within-bin = "
-            f"{self.reliability - self.resolution + self.uncertainty + self.within_bin:.3f}"
+            f"residual={self.residual:.4f}\n"
+            f"identity check: rel - res + unc + residual = "
+            f"{self.reliability - self.resolution + self.uncertainty + self.residual:.3f}"
         )
 
 
@@ -93,7 +96,7 @@ def calibration_report(
     bins: list[dict] = []
     reliability = 0.0
     resolution = 0.0
-    within_bin = 0.0
+    residual = 0.0
     edges = [i / n_bins for i in range(n_bins + 1)]
     for i in range(n_bins):
         lo, hi = edges[i], edges[i + 1]
@@ -120,7 +123,10 @@ def calibration_report(
         resolution += weight * (freq - base_rate) ** 2
         if len(members) > 1:
             var_p = sum((p - conf) ** 2 for p, _ in members) / len(members)
-            within_bin += weight * var_p
+            cov_po = (
+                sum((p - conf) * (o - freq) for p, o in members) / len(members)
+            )
+            residual += weight * (var_p - 2.0 * cov_po)
 
     return CalibrationReport(
         brier=brier_mean,
@@ -130,5 +136,5 @@ def calibration_report(
         uncertainty=uncertainty,
         n=n,
         bins=bins,
-        within_bin=within_bin,
+        residual=residual,
     )

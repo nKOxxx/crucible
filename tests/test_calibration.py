@@ -53,7 +53,7 @@ def test_perfectly_calibrated_forecaster_has_zero_reliability():
     rep = calibration_report(probs, outcomes, n_bins=5)
     assert rep.reliability < 1e-9
     assert rep.resolution > 0.0  # the two bins separate outcomes
-    identity = rep.reliability - rep.resolution + rep.uncertainty + rep.within_bin
+    identity = rep.reliability - rep.resolution + rep.uncertainty + rep.residual
     assert abs(identity - rep.brier) < 1e-9
 
 
@@ -76,7 +76,7 @@ def test_identity_is_exact_for_arbitrary_binnings():
     outs = [1 if rng.random() < p else 0 for p in probs]
     for n_bins in (1, 2, 3, 7, 25):
         rep = calibration_report(probs, outs, n_bins=n_bins)
-        identity = rep.reliability - rep.resolution + rep.uncertainty + rep.within_bin
+        identity = rep.reliability - rep.resolution + rep.uncertainty + rep.residual
         assert abs(identity - rep.brier) < 1e-9, f"n_bins={n_bins}"
 
 
